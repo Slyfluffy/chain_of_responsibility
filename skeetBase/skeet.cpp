@@ -304,39 +304,10 @@ void Skeet::drawStatus() const
  ************************/
 void Skeet::interact(const UserInput & ui)
 {
-   // reset the game
-   if (time.isGameOver() && ui.isSpace())
-   { 
-      time.reset();
-      score.reset();
-      hitRatio.reset();
-      return;
-   }
-
-   // gather input from the interface
-   gun.interact(ui.isUp() + ui.isRight(), ui.isDown() + ui.isLeft());
-   Bullet *p = nullptr;
-
-   // a pellet can be shot at any time
-   if (ui.isSpace())
-      p = new Pellet(gun.getAngle());
-   // missiles can be shot at level 2 and higher
-   else if (ui.isM() && time.level() > 1)
-      p = new Missile(gun.getAngle());
-   // bombs can be shot at level 3 and higher
-   else if (ui.isB() && time.level() > 2)
-      p = new Bomb(gun.getAngle());
-   
-   // add something if something has been added
-   if (nullptr != p)
-   {
-      bullets.push_back(p);
-      score.adjust(0 - p->getValue());
-   }
-   
-   // send movement information to all the bullets. Only the missile cares.
-   for (auto bullet : bullets)
-      bullet->input(ui.isUp() + ui.isRight(), ui.isDown() + ui.isLeft(), ui.isB()); 
+   setLevel(time.level());
+   for (auto handler : handlers)
+      if (handler->handleRequest(&ui, this))
+         break;
 }
 
 /******************************************************************
@@ -432,5 +403,135 @@ void Skeet::spawn()
          
       default:
          break;
+   }
+}
+
+/*******************************************
+ * SKEET :: HANDLERGAMEOVER :: HANDLEREQUEST
+ * INPUTS  :: *ui, *skeet
+ * OUTPUTS :: true or false
+ * official method that handles a reset
+ * from the game over menu.
+ ******************************************/
+bool Skeet::HandlerGameOver::handleRequest(const UserInput * ui, Skeet * s) {
+   if (ui->isSpace() && s->time.isGameOver()) {
+      s->time.reset();
+      s->score.reset();
+      s->hitRatio.reset();
+      return true;
+   }
+   
+   return false;
+}
+
+/*******************************************
+ * SKEET :: HANDLERPELLET :: HANDLEREQUEST
+ * INPUTS  :: *ui, *skeet
+ * OUTPUTS :: true or false
+ * official method that handles the creation
+ * of a pellet!
+ ******************************************/
+bool Skeet::HandlerPellet::handleRequest(const UserInput * ui, Skeet * s) {
+   if (ui->isSpace()) {
+      Bullet * p = new Pellet(s->gun.getAngle());
+      s->bullets.push_back(p);
+      s->score.adjust(0 - p->getValue());
+      return true;
+   }
+   
+   return false;
+}
+
+/*******************************************
+ * SKEET :: HANDLERMISSILE :: HANDLEREQUEST
+ * INPUTS  :: *ui, *skeet
+ * OUTPUTS :: true or false
+ * official method that handles the creation
+ * of a missile!
+ ******************************************/
+bool Skeet::HandlerMissile::handleRequest(const UserInput * ui, Skeet * s) {
+   if (ui->isM()) {
+      Bullet * p = new Missile(s->gun.getAngle());
+      s->bullets.push_back(p);
+      s->score.adjust(0 - p->getValue());
+      return true;
+   }
+   
+   return false;
+}
+
+/*******************************************
+ * SKEET :: HANDLERBOMB :: HANDLEREQUEST
+ * INPUTS  :: *ui, *skeet
+ * OUTPUTS :: true or false
+ * official method that handles the creation
+ * of a bomb!
+ ******************************************/
+bool Skeet::HandlerBomb::handleRequest(const UserInput * ui, Skeet * s) {
+   if (ui->isB()) {
+      Bullet * p = new Bomb(s->gun.getAngle());
+      s->bullets.push_back(p);
+      s->score.adjust(0 - p->getValue());
+      return true;
+   }
+   
+   return false;
+}
+
+/*******************************************
+ * SKEET :: HANDLERMOVEGUN :: HANDLEREQUEST
+ * INPUTS  :: *ui, *skeet
+ * OUTPUTS :: true or false
+ * official method that handles the movement
+ * of the gun.
+ ******************************************/
+bool Skeet::HandlerMoveGun::handleRequest(const UserInput * ui, Skeet * s) {
+   s->gun.interact(ui->isUp() + ui->isRight(), ui->isDown() + ui->isLeft());
+   return false;
+}
+
+/************************************************
+ * SKEET :: HANDLERGUIDEMISSILES :: HANDLEREQUEST
+ * INPUTS  :: *ui, *skeet
+ * OUTPUTS :: true or false
+ * official method that handles the guidance of
+ * the missiles.
+ ***********************************************/
+bool Skeet::HandlerGuideMissile::handleRequest(const UserInput * ui, Skeet * s) {
+   for (auto bullet : s->bullets) // Only missiles care about input.
+      bullet->input(ui->isUp() + ui->isRight(), ui->isDown() + ui->isLeft(), ui->isB());
+   return false;
+}
+
+/************************************
+ * SKEET :: SETLEVEL
+ * INPUTS  :: level
+ * OUTPUTS :: NONE
+ * Creates the chain needed for the
+ * current level (or game over menu).
+ ***********************************/
+void Skeet::setLevel(int level) {
+   handlers.clear(); // Clear the chain for use
+   switch (level) {
+      case 0:
+         handlers.push_back(new HandlerGameOver());
+         break;
+      case 1:
+         handlers.push_back(new HandlerMoveGun);
+         handlers.push_back(new HandlerPellet);
+         break;
+      case 2:
+         handlers.push_back(new HandlerMoveGun);
+         handlers.push_back(new HandlerGuideMissile);
+         handlers.push_back(new HandlerMissile);
+         handlers.push_back(new HandlerPellet);
+         break;
+      case 3:
+      case 4:
+         handlers.push_back(new HandlerMoveGun);
+         handlers.push_back(new HandlerGuideMissile);
+         handlers.push_back(new HandlerMissile);
+         handlers.push_back(new HandlerPellet);
+         handlers.push_back(new HandlerBomb);
    }
 }
